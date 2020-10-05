@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Aedes Detector</string>
+    <string name="title_map">Mapa</string>
+    <string name="title_recorder">Gravador</string>
+</resources>
