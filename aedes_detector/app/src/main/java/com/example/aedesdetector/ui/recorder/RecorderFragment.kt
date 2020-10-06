@@ -1,14 +1,22 @@
 package com.example.aedesdetector.ui.recorder
 
+import android.Manifest
 import android.app.Activity
 import android.content.ContentResolver
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.AudioRecord
+import android.media.MediaRecorder
+import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProviders
 import cafe.adriel.androidaudioconverter.AndroidAudioConverter
@@ -17,6 +25,9 @@ import cafe.adriel.androidaudioconverter.model.AudioFormat
 import com.example.aedesdetector.R
 import com.example.aedesdetector.spec.MFCC
 import java.io.File
+import java.io.FileNotFoundException
+import java.io.FileOutputStream
+import java.io.IOException
 
 
 class RecorderFragment : Fragment() {
@@ -30,6 +41,19 @@ class RecorderFragment : Fragment() {
     //audio converter
     private lateinit var audioConverterCallback: IConvertCallback
 
+    //audio recorder
+    private lateinit var filePath: String
+    private var bufferSizeInByte: Int = 0
+    private val bufferElements2Rec = 1024 // want to play 2048 (2K) since 2 bytes we use only 1024
+    private val bytesPerElement = 2 // 2 bytes in 16bit format
+    private val RECORDER_SAMPLERATE: Int = 8000
+    private val RECORDER_CHANNELS: Int = android.media.AudioFormat.CHANNEL_IN_MONO
+    private val RECORDER_AUDIO_ENCODING: Int = android.media.AudioFormat.ENCODING_PCM_16BIT
+    private var recorder: AudioRecord? = null
+    private var recordingThread: Thread? = null
+    private var isRecording = false
+
+    private lateinit var recordButton: Button
 
     override fun onCreateView(
             inflater: LayoutInflater,
@@ -53,6 +77,13 @@ class RecorderFragment : Fragment() {
             )
         }
 
+        recordButton = root.findViewById(R.id.record_button)
+        recordButton.setOnClickListener {
+            recordAudio()
+        }
+
+
+
         audioConverterCallback = object : IConvertCallback {
             override fun onSuccess(convertedFile: File) {
                 // audio converted!
@@ -66,6 +97,106 @@ class RecorderFragment : Fragment() {
         }
 
         return root
+    }
+
+    private fun recordAudio() {
+        if (!isRecording) {
+            if (ContextCompat.checkSelfPermission(
+                    requireContext(),
+                    Manifest.permission.RECORD_AUDIO
+                ) != PackageManager.PERMISSION_GRANTED && ContextCompat.checkSelfPermission(
+                    requireContext(),
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                val permissions = arrayOf(
+                    android.Manifest.permission.RECORD_AUDIO,
+                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                    android.Manifest.permission.READ_EXTERNAL_STORAGE
+                )
+                ActivityCompat.requestPermissions(requireActivity(), permissions, 0)
+            } else {
+                startRecording()
+            }
+        }
+        else {
+            stopRecording()
+        }
+    }
+
+    private fun startRecording() {
+
+        filePath = "${requireContext().cacheDir}/${System.currentTimeMillis()}.pcm"
+        bufferSizeInByte = AudioRecord.getMinBufferSize(RECORDER_SAMPLERATE, RECORDER_CHANNELS, RECORDER_AUDIO_ENCODING)
+
+        recorder = AudioRecord(
+            MediaRecorder.AudioSource.MIC,
+            RECORDER_SAMPLERATE, RECORDER_CHANNELS,
+            RECORDER_AUDIO_ENCODING, bufferElements2Rec * bytesPerElement
+        )
+
+        recorder!!.startRecording()
+        isRecording = true
+        recordButton.setText("GRAVANDO")
+        recordingThread = Thread(Runnable { writeAudioDataToFile() }, "AudioRecorder Thread")
+        recordingThread!!.start()
+    }
+
+    private fun writeAudioDataToFile() {
+        // Write the output audio in byte
+        val sData = ByteArray(bufferSizeInByte)
+        var os: FileOutputStream? = null
+        try {
+            os = FileOutputStream(filePath)
+        } catch (e: FileNotFoundException) {
+            e.printStackTrace()
+        }
+        while (isRecording) {
+            // gets the voice output from microphone to byte format
+            val length = recorder!!.read(sData, 0, bufferSizeInByte)
+            println("Short writing to file$sData")
+            try {
+                // // writes the data to file from buffer
+                // // stores the voice buffer
+                val bData: ByteArray = sData
+                os?.write(bData, 0, length)
+            } catch (e: IOException) {
+                e.printStackTrace()
+            }
+        }
+        try {
+            os?.close()
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun stopRecording() {
+        if (recorder != null) {
+            recordButton.setText("GRAVAR")
+            isRecording = false
+            recorder?.stop()
+            recorder?.release()
+            recorder = null
+            recordingThread = null
+            try {
+                val contentResolver: ContentResolver = this.context!!.contentResolver
+                val audioBytes = contentResolver.openInputStream(Uri.parse(filePath))
+                if (audioBytes != null) {
+                    currentAudio = audioBytes.readBytes()
+                    val mfccConvert = MFCC()
+                    val audioDoubleSample = currentAudio.toDoubleSamples()
+                    val mfccInput = mfccConvert.processSpectrogram(audioDoubleSample)
+                    Log.d("MFCC", mfccInput.toString())
+                }
+                else {
+                    Log.d("ERROR", "Null audio!")
+                }
+            }
+            catch(e: Exception) {
+                Log.d("EXCEPTION", e.localizedMessage)
+            }
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
