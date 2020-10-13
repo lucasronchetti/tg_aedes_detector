@@ -78,6 +78,7 @@ class MapFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMarkerClickListe
         if (googleMap == null) {
             return
         }
+
         //Set up location manager to fetch user's current location
         if (!this::locationManager.isInitialized) {
             // Create persistent LocationManager reference

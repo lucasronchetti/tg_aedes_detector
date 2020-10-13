@@ -25,6 +25,7 @@ import cafe.adriel.androidaudioconverter.callback.IConvertCallback
 import cafe.adriel.androidaudioconverter.model.AudioFormat
 import com.example.aedesdetector.R
 import com.example.aedesdetector.spec.MFCC
+import com.example.aedesdetector.ui.report_screen.ReportScreenActivity
 import com.example.aedesdetector.utils.AlertUtils
 import java.io.File
 import java.io.FileNotFoundException
@@ -266,6 +267,7 @@ class RecorderFragment : Fragment() {
             "Sim",
             DialogInterface.OnClickListener { dialog, id ->
                 // User clicked OK button
+                startActivity(Intent(requireContext(), ReportScreenActivity::class.java))
             },
             "Não",
             DialogInterface.OnClickListener { dialog, id ->
