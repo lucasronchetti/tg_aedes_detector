@@ -2,44 +2,39 @@ package com.example.aedesdetector.ui.map
 
 import android.content.Context.LOCATION_SERVICE
 import android.content.pm.PackageManager
-import android.location.Location
-import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.TextView
 import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import androidx.core.content.ContextCompat.getSystemService
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProviders
 import com.example.aedesdetector.R
+import com.example.aedesdetector.models.UserReport
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.MapView
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.Marker
+import com.google.android.gms.maps.model.MarkerOptions
 
 
-class MapFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMarkerClickListener  {
+class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.OnMarkerClickListener  {
 
-    private lateinit var mapViewModel: MapViewModel
     private lateinit var mapView: MapView
     private lateinit var googleMap: GoogleMap
     private lateinit var locationManager: LocationManager
+
+    private var pinsHasMap = HashMap<String, UserReport>()
 
     override fun onCreateView(
             inflater: LayoutInflater,
             container: ViewGroup?,
             savedInstanceState: Bundle?
     ): View? {
-        mapViewModel =
-                ViewModelProviders.of(this).get(MapViewModel::class.java)
         val root = inflater.inflate(R.layout.fragment_map, container, false)
 
         mapView = root.findViewById(R.id.map_view)
@@ -59,6 +54,13 @@ class MapFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMarkerClickListe
                 4.0f
             ))
             setUpMap()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (this::googleMap.isInitialized) {
+            MapPresenter(this, requireContext()).fetchPinsWithMapLocation(googleMap.cameraPosition.target, 15.0f)
         }
     }
 
@@ -94,11 +96,14 @@ class MapFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMarkerClickListe
         //Center map on user's location
         googleMap.isMyLocationEnabled = true
         val location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+        val latLngLocation = LatLng(location.latitude, location.longitude)
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
-            LatLng(location.latitude, location.longitude),
+            latLngLocation,
             15.0f
         ))
+        MapPresenter(this, requireContext()).fetchPinsWithMapLocation(latLngLocation, 15.0f)
     }
+
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
@@ -112,7 +117,24 @@ class MapFragment : Fragment(), OnMapReadyCallback, GoogleMap.OnMarkerClickListe
         }
     }
 
+
+
     companion object {
         private const val LOCATION_PERMISSION_REQUEST_CODE = 1
+    }
+
+    override fun onPinsFetch(pinsList: ArrayList<UserReport>) {
+        for (pin in pinsList) {
+            if (!pinsHasMap.contains(pin.pinKey)) {
+                var pinOptions = MarkerOptions()
+                pinOptions.position(LatLng(pin.latitude, pin.longitude))
+                googleMap.addMarker(pinOptions)
+                pinsHasMap[pin.pinKey] = pin
+            }
+        }
+    }
+
+    override fun onErrorFetchingPins(message: String) {
+
     }
 }
