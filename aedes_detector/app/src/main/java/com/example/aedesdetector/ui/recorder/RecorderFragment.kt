@@ -3,6 +3,7 @@ package com.example.aedesdetector.ui.recorder
 import android.Manifest
 import android.app.Activity
 import android.content.ContentResolver
+import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioRecord
@@ -24,6 +25,7 @@ import cafe.adriel.androidaudioconverter.callback.IConvertCallback
 import cafe.adriel.androidaudioconverter.model.AudioFormat
 import com.example.aedesdetector.R
 import com.example.aedesdetector.spec.MFCC
+import com.example.aedesdetector.utils.AlertUtils
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
@@ -55,6 +57,9 @@ class RecorderFragment : Fragment() {
 
     private lateinit var recordButton: Button
 
+    private lateinit var positiveButton: Button
+    private lateinit var negativeButton: Button
+
     override fun onCreateView(
             inflater: LayoutInflater,
             container: ViewGroup?,
@@ -82,9 +87,17 @@ class RecorderFragment : Fragment() {
             recordAudio()
         }
 
+        positiveButton = root.findViewById(R.id.positive_action_button)
+        positiveButton.setOnClickListener {
+            positiveAedesIdentification()
+        }
 
+        negativeButton = root.findViewById(R.id.negative_action_button)
+        negativeButton.setOnClickListener {
+            negativeAedesIdentification()
+        }
 
-        audioConverterCallback = object : IConvertCallback {
+         audioConverterCallback = object : IConvertCallback {
             override fun onSuccess(convertedFile: File) {
                 // audio converted!
                 currentAudio = convertedFile.readBytes()
@@ -244,6 +257,32 @@ class RecorderFragment : Fragment() {
                 }
             }
         }
+    }
+
+    private fun positiveAedesIdentification() {
+        AlertUtils.displayAlert(requireContext(),
+            "Aedes!",
+            "Identificamos um Aedes aegypti. Gostaria de compartilhar no mapa?",
+            "Sim",
+            DialogInterface.OnClickListener { dialog, id ->
+                // User clicked OK button
+            },
+            "Não",
+            DialogInterface.OnClickListener { dialog, id ->
+                // User clicked OK button
+            })
+    }
+
+    private fun negativeAedesIdentification() {
+        AlertUtils.displayAlert(requireContext(),
+            "Não é Aedes!",
+            "Não identificamos um aedes na sua gravação.",
+            "Ok",
+            DialogInterface.OnClickListener { dialog, id ->
+                // User clicked OK button
+            },
+            null,
+            null)
     }
 
     fun ByteArray.toDoubleSamples() = mapPairsToDoubles{ a, b ->

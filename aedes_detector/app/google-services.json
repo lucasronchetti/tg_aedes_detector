@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "263612348037",
+    "firebase_url": "https://aedes-detector.firebaseio.com",
+    "project_id": "aedes-detector",
+    "storage_bucket": "aedes-detector.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:263612348037:android:fbd003fa3a742a538cdbec",
+        "android_client_info": {
+          "package_name": "br.com.lucasronchetti.aedesdetector"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "263612348037-gsp9odogmk3kofudevdqheio6apj82p9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBgdX3GjX5Mc-Ex9K5eRA6hvE2SZ3jPgxg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "263612348037-gsp9odogmk3kofudevdqheio6apj82p9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
