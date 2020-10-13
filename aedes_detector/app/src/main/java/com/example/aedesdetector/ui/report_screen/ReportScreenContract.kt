@@ -1,5 +1,7 @@
 package com.example.aedesdetector.ui.report_screen
 
+import com.google.android.gms.maps.model.LatLng
+
 interface ReportScreenContract {
 
     interface View{
@@ -8,6 +10,6 @@ interface ReportScreenContract {
     }
 
     interface Presenter{
-        fun uploadPinLocation()
+        fun uploadPinLocation(userLocation: LatLng?, reportLocation: LatLng, reportType: Int)
     }
 }

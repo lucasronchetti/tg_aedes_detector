@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import com.example.aedesdetector.R
@@ -28,6 +29,7 @@ class ReportScreenActivity: AppCompatActivity(), ReportScreenContract.View, OnMa
     private lateinit var googleMap: GoogleMap
     private lateinit var locationManager: LocationManager
     private var mapCircle: Circle? = null
+    private var userLocation: LatLng? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,12 +85,13 @@ class ReportScreenActivity: AppCompatActivity(), ReportScreenContract.View, OnMa
         //Center map on user's location
         googleMap.setOnMapClickListener(this)
         val location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-        val userLocation = LatLng(location.latitude, location.longitude)
+        val latLngLocation = LatLng(location.latitude, location.longitude)
+        userLocation = latLngLocation
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
             userLocation,
             15.0f
         ))
-        onMapClick(getUserLocationWithError(userLocation))
+        onMapClick(getUserLocationWithError(latLngLocation))
     }
 
     override fun onMapClick(p0: LatLng?) {
@@ -127,6 +130,7 @@ class ReportScreenActivity: AppCompatActivity(), ReportScreenContract.View, OnMa
     }
 
     override fun onError(message: String) {
+        hideLoader()
         AlertUtils.displayAlert(
             this,
             "Ocorrência",
@@ -160,8 +164,14 @@ class ReportScreenActivity: AppCompatActivity(), ReportScreenContract.View, OnMa
     }
 
     private fun uploadLocationToDatabase() {
-        showLoader()
-        ReportScreenPresenter(this, this).uploadPinLocation()
+        if (mapCircle != null) {
+            showLoader()
+            //TODO: Edit the report type here...
+            ReportScreenPresenter(this, this).uploadPinLocation(userLocation, mapCircle!!.center, 1)
+        }
+        else {
+            Toast.makeText(this, "Selecione um local no mapa para registrar a ocorrência!", Toast.LENGTH_SHORT).show()
+        }
     }
 
     companion object {
