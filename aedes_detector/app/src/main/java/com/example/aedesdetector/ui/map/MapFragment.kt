@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
 import androidx.core.app.ActivityCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProviders
@@ -17,9 +18,9 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.MapView
 import com.google.android.gms.maps.OnMapReadyCallback
-import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.Marker
-import com.google.android.gms.maps.model.MarkerOptions
+import com.google.android.gms.maps.model.*
+import com.google.maps.android.heatmaps.HeatmapTileProvider
+import kotlinx.android.synthetic.main.fragment_map.*
 
 
 class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.OnMarkerClickListener  {
@@ -28,7 +29,12 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
     private lateinit var googleMap: GoogleMap
     private lateinit var locationManager: LocationManager
 
-    private var pinsHasMap = HashMap<String, UserReport>()
+    private var heatmapOverlay: TileOverlay? = null
+
+    private var showingPins = true
+    private var showingHeatmap = false
+
+    private var pinsHasMap = HashMap<String, Marker>()
 
     override fun onCreateView(
             inflater: LayoutInflater,
@@ -42,7 +48,51 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
         mapView.onResume()
         mapView.getMapAsync(this)
 
+        root.findViewById<Button>(R.id.pin_button).setOnClickListener {
+            setPins()
+        }
+
+        root.findViewById<Button>(R.id.heatmap_button).setOnClickListener {
+            setHeatmap()
+        }
+
         return root
+    }
+
+    private fun setHeatmap() {
+        if (showingHeatmap) {
+            heatmapOverlay?.remove()
+        }
+        else {
+            var latLngList = ArrayList<LatLng>()
+            for (pinKey in pinsHasMap.keys) {
+                val pin = pinsHasMap[pinKey]
+                if (pin != null) {
+                    latLngList.add(pin.position)
+                }
+            }
+            val provider = HeatmapTileProvider.Builder()
+                .data(latLngList)
+                .build()
+
+            heatmapOverlay = googleMap.addTileOverlay(TileOverlayOptions().tileProvider(provider))
+        }
+        showingHeatmap = !showingHeatmap
+
+    }
+
+    private fun setPins() {
+        if (showingPins) {
+            for (pin in pinsHasMap.keys) {
+                pinsHasMap[pin]?.isVisible = false
+            }
+        }
+        else {
+            for (pin in pinsHasMap.keys) {
+                pinsHasMap[pin]?.isVisible = true
+            }
+        }
+        showingPins = !showingPins
     }
 
     override fun onMapReady(mMap: GoogleMap?) {
@@ -65,7 +115,6 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
     }
 
     override fun onMarkerClick(p0: Marker?): Boolean {
-
         return true
     }
 
@@ -128,8 +177,8 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
             if (!pinsHasMap.contains(pin.pinKey)) {
                 var pinOptions = MarkerOptions()
                 pinOptions.position(LatLng(pin.latitude, pin.longitude))
-                googleMap.addMarker(pinOptions)
-                pinsHasMap[pin.pinKey] = pin
+                val marker = googleMap.addMarker(pinOptions)
+                pinsHasMap[pin.pinKey] = marker
             }
         }
     }
