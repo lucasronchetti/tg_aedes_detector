@@ -1,25 +1,56 @@
 package com.example.aedesdetector.spec;
 
 
+import java.util.Arrays;
+
+import static java.lang.Double.max;
+
 public class MFCC {
 
-    private final static int       n_mfcc       		= 20;
-    private final static double    fMin                 = 0.0;
     private final static int       n_fft                = 1024;
     private final static int       hop_length           = 256;
+    private final static double    sampleRate           = 8000.0;
     private final static int	   n_mels               = 60;
 
-    private final static double    sampleRate           = 8000.0;
+
+    private final static double    fMin                 = 0.0;
     private final static double    fMax                 = sampleRate/2.0;
 
+
+    private final static int       n_mfcc       		= 20;
+
     FFT fft = new FFT();
-
-
-
 
     public float[] processSpectrogram(double[] doubleInputBuffer) {
         final double[][] spectrogram = powerToDb(melSpectrogram(doubleInputBuffer));
         return finalshape(spectrogram);
+    }
+
+    public float[][][] processBulkSpectrograms(double[] doubleInputBuffer, int frameSize) {
+        //return multiple spectrograms here according to window size
+        int windowSize =  hop_length * (frameSize - 1);
+        int numberOfSpectrograms = doubleInputBuffer.length / windowSize;
+        final float[][][] spectrogram = new float[numberOfSpectrograms * 2][][];
+        int start = 0;
+        int end = windowSize;
+        for(int i = 0; i < numberOfSpectrograms * 2; i++) {
+            spectrogram[i] = convert(powerToDb(melSpectrogram(Arrays.copyOfRange(doubleInputBuffer, start, end))));
+            start += windowSize / 2;
+            end += windowSize / 2;
+        }
+        return spectrogram;
+    }
+
+    public float[][] convert(double[][] doubleInput) {
+        float[][] floatArray = new float[doubleInput.length][];
+        for (int i = 0 ; i < doubleInput.length; i++)
+        {
+            floatArray[i] = new float[doubleInput[i].length];
+            for (int j = 0; j < doubleInput[i].length; j++) {
+                floatArray[i][j] = (float) ((doubleInput[i][j] / 80 ) + 1);
+            }
+        }
+        return floatArray;
     }
 
     public float[] process(double[] doubleInputBuffer) {
@@ -142,13 +173,23 @@ public class MFCC {
         //Convert a power spectrogram (amplitude squared) to decibel (dB) units
         //  This computes the scaling ``10 * log10(S / ref)`` in a numerically
         //  stable way.
+        //amin = 1e-10
+        //log_spec = 10.0 * np.log10(np.maximum(amin, magnitude))
+        //    log_spec -= 10.0 * np.log10(np.maximum(amin, ref_value))
         double[][] log_spec = new double[melS.length][melS[0].length];
         double maxValue = -100;
+        double thisMax = -1000;
+        for (int i = 0; i < melS.length; i++) {
+            for (int j = 0; j < melS[0].length; j++) {
+                thisMax = max(thisMax, melS[i][j]);
+            }
+        }
         for (int i = 0; i < melS.length; i++){
             for (int j = 0; j < melS[0].length; j++){
                 double magnitude = Math.abs(melS[i][j]);
                 if (magnitude > 1e-10){
                     log_spec[i][j]=10.0*log10(magnitude);
+                    log_spec[i][j] = log_spec[i][j] -10.0 * log10(max(magnitude, thisMax));
                 }else{
                     log_spec[i][j]=10.0*(-10);
                 }

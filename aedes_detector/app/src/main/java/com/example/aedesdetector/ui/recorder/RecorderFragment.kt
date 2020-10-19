@@ -25,12 +25,24 @@ import cafe.adriel.androidaudioconverter.callback.IConvertCallback
 import cafe.adriel.androidaudioconverter.model.AudioFormat
 import com.example.aedesdetector.R
 import com.example.aedesdetector.spec.MFCC
+import com.example.aedesdetector.spec.WavFile
 import com.example.aedesdetector.ui.report_screen.ReportScreenActivity
 import com.example.aedesdetector.utils.AlertUtils
+import org.tensorflow.lite.DataType
+import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.support.common.FileUtil
+import org.tensorflow.lite.support.common.TensorProcessor
+import org.tensorflow.lite.support.common.ops.NormalizeOp
+import org.tensorflow.lite.support.label.TensorLabel
+import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
+import java.lang.Float.max
+import java.net.URI
+import java.nio.ByteBuffer
+import java.nio.MappedByteBuffer
 
 
 class RecorderFragment : Fragment() {
@@ -201,6 +213,7 @@ class RecorderFragment : Fragment() {
                     val mfccConvert = MFCC()
                     val audioDoubleSample = currentAudio.toDoubleSamples()
                     val mfccInput = mfccConvert.processSpectrogram(audioDoubleSample)
+                    loadModelAndMakePredictions(mfccInput)
                     Log.d("MFCC", mfccInput.toString())
                 }
                 else {
@@ -228,11 +241,50 @@ class RecorderFragment : Fragment() {
                         if (audioType == "audio/wav" || audioType == "audio/x-wav") {
                             //supported format
                             val audioBytes = uri?.let { contentResolver.openInputStream(it) }
+
+                            try {
+                                val mNumFrames: Int
+                                val mSampleRate: Int
+                                val mChannels: Int
+
+                                var predictedResult: Float = 0.0F
+
+                                var wavFile: WavFile? = null
+                                    wavFile = WavFile.openWavFile(audioBytes)
+                                    mNumFrames = wavFile.numFrames.toInt()
+                                    mChannels = wavFile.numChannels
+                                    val buffer = Array(mChannels) { DoubleArray(mNumFrames) }
+                                    wavFile.readFrames(buffer, mNumFrames, 0)
+                                val mfccConvert = MFCC()
+
+                                for (channel in buffer) {
+                                    val mfccInput = mfccConvert.processBulkSpectrograms(channel, 40)
+
+                                    for (element in mfccInput) {
+                                        val flattenedSpec = flattenSpectrogram(element)
+                                        predictedResult = max(loadModelAndMakePredictions(flattenedSpec), predictedResult)
+                                    }
+                                }
+                                Log.d("MFCC R", predictedResult.toString())
+                                Log.d("MFCC", "Finished")
+                                return
+                            }
+                            catch(e: Exception) {
+                                Log.d("EXCEPTION", e.localizedMessage)
+                                return
+                            }
+
                             if (audioBytes != null) {
                                 currentAudio = audioBytes.readBytes()
                                 val mfccConvert = MFCC()
                                 val audioDoubleSample = currentAudio.toDoubleSamples()
-                                val mfccInput = mfccConvert.processSpectrogram(audioDoubleSample)
+                                val mfccInput = mfccConvert.processBulkSpectrograms(audioDoubleSample, 40)
+
+                                for (element in mfccInput) {
+                                    val flattenedSpec = flattenSpectrogram(element)
+                                    loadModelAndMakePredictions(flattenedSpec)
+                                }
+
                                 Log.d("MFCC", mfccInput.toString())
                             }
                             else {
@@ -258,6 +310,16 @@ class RecorderFragment : Fragment() {
                 }
             }
         }
+    }
+
+    private fun flattenSpectrogram(input: Array<FloatArray>): FloatArray {
+        var output: ArrayList<Float> = ArrayList<Float>();
+        input[0].indices.forEach { i ->
+            input.indices.forEach{ j ->
+                output.add(input[j][i])
+            }
+        }
+        return output.toFloatArray()
     }
 
     private fun positiveAedesIdentification() {
@@ -293,5 +355,50 @@ class RecorderFragment : Fragment() {
 
     inline fun ByteArray.mapPairsToDoubles(block: (Byte, Byte) -> Double)
             = DoubleArray(size / 2){ i -> block(this[2 * i], this[2 * i + 1]) }
+
+    protected fun loadModelAndMakePredictions(meanMFCCValues : FloatArray) : Float {
+        //load the TFLite model in 'MappedByteBuffer' format using TF Interpreter
+        val tfliteModel: MappedByteBuffer =
+            FileUtil.loadMappedFile(requireContext(), getModelPath())
+        val tflite: Interpreter
+
+        /** Options for configuring the Interpreter.  */
+        val tfliteOptions =
+            Interpreter.Options()
+        tfliteOptions.setNumThreads(2)
+        tflite = Interpreter(tfliteModel, tfliteOptions)
+
+        //obtain the input and output tensor size required by the model
+        //for urban sound classification, input tensor should be of 1x40x1x1 shape
+        val imageTensorIndex = 0
+        val imageShape =
+            tflite.getInputTensor(imageTensorIndex).shape()
+        val imageDataType: DataType = tflite.getInputTensor(imageTensorIndex).dataType()
+        val probabilityTensorIndex = 0
+        val probabilityShape =
+            tflite.getOutputTensor(probabilityTensorIndex).shape()
+        val probabilityDataType: DataType =
+            tflite.getOutputTensor(probabilityTensorIndex).dataType()
+
+        //need to transform the MFCC 1d float buffer into 1x40x1x1 dimension tensor using TensorBuffer
+        val inBuffer: TensorBuffer = TensorBuffer.createDynamic(imageDataType)
+        inBuffer.loadArray(meanMFCCValues, imageShape)
+        val inpBuffer: ByteBuffer = inBuffer.buffer
+        val outputTensorBuffer: TensorBuffer =
+            TensorBuffer.createFixedSize(probabilityShape, probabilityDataType)
+        //run the predictions with input and output buffer tensors to get probability values across the labels
+        tflite.run(inpBuffer, outputTensorBuffer.buffer)
+
+        val result = outputTensorBuffer.floatArray.first()
+        if (result > 0.5) {
+            Log.d("RESULT", "TRUE")
+        }
+        return result
+
+    }
+
+    fun getModelPath(): String {
+        return "aedes_converted.tflite"
+    }
 }
 
