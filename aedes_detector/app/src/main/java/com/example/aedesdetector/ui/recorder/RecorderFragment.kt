@@ -98,16 +98,6 @@ class RecorderFragment : Fragment() {
             recordAudio()
         }
 
-        positiveButton = root.findViewById(R.id.positive_action_button)
-        positiveButton.setOnClickListener {
-            positiveAedesIdentification()
-        }
-
-        negativeButton = root.findViewById(R.id.negative_action_button)
-        negativeButton.setOnClickListener {
-            negativeAedesIdentification()
-        }
-
          audioConverterCallback = object : IConvertCallback {
             override fun onSuccess(convertedFile: File) {
                 // audio converted!
@@ -197,38 +187,24 @@ class RecorderFragment : Fragment() {
 
     private fun stopRecording() {
         val fileName = WavRecorder.getInstance().stopRecording()
+        recordButton.setText("GRAVAR")
+        isRecording = false
         Log.d("FILENAME", fileName)
         try {
                 val audioBytes = File(fileName).inputStream()
                 if (audioBytes != null) {
-                    extractFeaturesAndRunEvaluation(audioBytes)
+                    val result = extractFeaturesAndRunEvaluation(audioBytes)
+                    if (result) {
+                        positiveAedesIdentification()
+                    }
+                    else {
+                        negativeAedesIdentification()
+                    }
                 }
         }
         catch(e: Exception) {
             Log.d("EXCEPTION", e.localizedMessage)
         }
-//        if (recorder != null) {
-            recordButton.setText("GRAVAR")
-            isRecording = false
-//            recorder?.stop()
-//            recorder?.release()
-//            recorder = null
-//            recordingThread = null
-//            try {
-//                val contentResolver: ContentResolver = this.context!!.contentResolver
-//                val uriPath = Uri.parse(filePath)
-//                val audioBytes = contentResolver.openInputStream(uriPath)
-//                if (audioBytes != null) {
-//                    extractFeaturesAndRunEvaluation(audioBytes)
-//                }
-//                else {
-//                    Log.d("ERROR", "Null audio!")
-//                }
-//            }
-//            catch(e: Exception) {
-//                Log.d("EXCEPTION", e.localizedMessage)
-//            }
-//        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -246,7 +222,13 @@ class RecorderFragment : Fragment() {
                         if (audioType == "audio/wav" || audioType == "audio/x-wav") {
                             //supported format
                             val audioBytes = uri?.let { contentResolver.openInputStream(it) }
-                            extractFeaturesAndRunEvaluation(audioBytes)
+                            val result = extractFeaturesAndRunEvaluation(audioBytes)
+                            if (result) {
+                                positiveAedesIdentification()
+                            }
+                            else {
+                                negativeAedesIdentification()
+                            }
                             return
                         }
                         else {
@@ -297,7 +279,7 @@ class RecorderFragment : Fragment() {
             }
             Log.d("MFCC R", predictedResult.toString())
             Log.d("MFCC", "Finished")
-            return true
+            return predictedResult > 0.95
         } catch (e: Exception) {
             Log.d("EXCEPTION", e.localizedMessage)
             return false

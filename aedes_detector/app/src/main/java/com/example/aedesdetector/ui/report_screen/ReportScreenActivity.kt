@@ -85,13 +85,23 @@ class ReportScreenActivity: AppCompatActivity(), ReportScreenContract.View, OnMa
         //Center map on user's location
         googleMap.setOnMapClickListener(this)
         val location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-        val latLngLocation = LatLng(location.latitude, location.longitude)
-        userLocation = latLngLocation
-        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
-            userLocation,
-            15.0f
-        ))
-        onMapClick(getUserLocationWithError(latLngLocation))
+        if (location == null) {
+            googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
+                LatLng(-16.1815243,-51.6828065),
+                4.0f
+            ))
+        }
+        else {
+            val latLngLocation = LatLng(location.latitude, location.longitude)
+            userLocation = latLngLocation
+            googleMap.moveCamera(
+                CameraUpdateFactory.newLatLngZoom(
+                    userLocation,
+                    15.0f
+                )
+            )
+            onMapClick(getUserLocationWithError(latLngLocation))
+        }
     }
 
     override fun onMapClick(p0: LatLng?) {

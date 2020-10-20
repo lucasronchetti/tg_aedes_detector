@@ -145,12 +145,23 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
         //Center map on user's location
         googleMap.isMyLocationEnabled = true
         val location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-        val latLngLocation = LatLng(location.latitude, location.longitude)
-        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
-            latLngLocation,
-            15.0f
-        ))
-        MapPresenter(this, requireContext()).fetchPinsWithMapLocation(latLngLocation, 15.0f)
+        if (location == null) {
+            googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
+                LatLng(-16.1815243,-51.6828065),
+                4.0f
+            ))
+            MapPresenter(this, requireContext()).fetchPinsWithMapLocation(LatLng(-16.1815243,-51.6828065), 15.0f)
+        }
+        else {
+            val latLngLocation = LatLng(location.latitude, location.longitude)
+            googleMap.moveCamera(
+                CameraUpdateFactory.newLatLngZoom(
+                    latLngLocation,
+                    15.0f
+                )
+            )
+            MapPresenter(this, requireContext()).fetchPinsWithMapLocation(latLngLocation, 15.0f)
+        }
     }
 
 
