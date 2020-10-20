@@ -72,12 +72,12 @@ class RecorderFragment : Fragment() {
     private lateinit var negativeButton: Button
 
     override fun onCreateView(
-            inflater: LayoutInflater,
-            container: ViewGroup?,
-            savedInstanceState: Bundle?
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
     ): View? {
         recorderViewModel =
-                ViewModelProviders.of(this).get(RecorderViewModel::class.java)
+            ViewModelProviders.of(this).get(RecorderViewModel::class.java)
         val root = inflater.inflate(R.layout.fragment_recorder, container, false)
         val openFileButton: Button = root.findViewById(R.id.open_file_button)
         openFileButton.setOnClickListener {
@@ -98,10 +98,16 @@ class RecorderFragment : Fragment() {
             recordAudio()
         }
 
-         audioConverterCallback = object : IConvertCallback {
+        audioConverterCallback = object : IConvertCallback {
             override fun onSuccess(convertedFile: File) {
                 // audio converted!
-                currentAudio = convertedFile.readBytes()
+                val audioBytes = convertedFile.inputStream()
+                val result = extractFeaturesAndRunEvaluation(audioBytes)
+                if (result) {
+                    positiveAedesIdentification()
+                } else {
+                    negativeAedesIdentification()
+                }
             }
 
             override fun onFailure(error: java.lang.Exception) {
@@ -124,65 +130,23 @@ class RecorderFragment : Fragment() {
                 ) != PackageManager.PERMISSION_GRANTED
             ) {
                 val permissions = arrayOf(
-                    android.Manifest.permission.RECORD_AUDIO,
-                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                    android.Manifest.permission.READ_EXTERNAL_STORAGE
+                    Manifest.permission.RECORD_AUDIO,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                    Manifest.permission.READ_EXTERNAL_STORAGE
                 )
                 ActivityCompat.requestPermissions(requireActivity(), permissions, 0)
             } else {
                 startRecording()
             }
-        }
-        else {
+        } else {
             stopRecording()
         }
     }
 
     private fun startRecording() {
-//        filePath = "${requireContext().cacheDir}/${System.currentTimeMillis()}.wav"
-//        bufferSizeInByte = AudioRecord.getMinBufferSize(RECORDER_SAMPLERATE, RECORDER_CHANNELS, RECORDER_AUDIO_ENCODING)
-//
-//        recorder = AudioRecord(
-//            MediaRecorder.AudioSource.MIC,
-//            RECORDER_SAMPLERATE, RECORDER_CHANNELS,
-//            RECORDER_AUDIO_ENCODING, bufferElements2Rec * bytesPerElement
-//        )
-//
-//        recorder!!.startRecording()
         isRecording = true
         recordButton.setText("GRAVANDO")
-//        recordingThread = Thread(Runnable { writeAudioDataToFile() }, "AudioRecorder Thread")
-//        recordingThread!!.start()
         WavRecorder.getInstance().startRecording(requireContext())
-    }
-
-    private fun writeAudioDataToFile() {
-        // Write the output audio in byte
-        val sData = ByteArray(bufferSizeInByte)
-        var os: FileOutputStream? = null
-        try {
-            os = FileOutputStream(filePath)
-        } catch (e: FileNotFoundException) {
-            e.printStackTrace()
-        }
-        while (isRecording) {
-            // gets the voice output from microphone to byte format
-            val length = recorder!!.read(sData, 0, bufferSizeInByte)
-            println("Short writing to file$sData")
-            try {
-                // // writes the data to file from buffer
-                // // stores the voice buffer
-                val bData: ByteArray = sData
-                os?.write(bData, 0, length)
-            } catch (e: IOException) {
-                e.printStackTrace()
-            }
-        }
-        try {
-            os?.close()
-        } catch (e: IOException) {
-            e.printStackTrace()
-        }
     }
 
     private fun stopRecording() {
@@ -191,19 +155,15 @@ class RecorderFragment : Fragment() {
         isRecording = false
         Log.d("FILENAME", fileName)
         try {
-                val audioBytes = File(fileName).inputStream()
-                if (audioBytes != null) {
-                    val result = extractFeaturesAndRunEvaluation(audioBytes)
-                    if (result) {
-                        positiveAedesIdentification()
-                    }
-                    else {
-                        negativeAedesIdentification()
-                    }
-                }
-        }
-        catch(e: Exception) {
-            Log.d("EXCEPTION", e.localizedMessage)
+            val audioBytes = File(fileName).inputStream()
+            val result = extractFeaturesAndRunEvaluation(audioBytes)
+            if (result) {
+                positiveAedesIdentification()
+            } else {
+                negativeAedesIdentification()
+            }
+        } catch (e: Exception) {
+            Log.d("EXCEPTION", e.toString())
         }
     }
 
@@ -215,37 +175,36 @@ class RecorderFragment : Fragment() {
                     val uri = data.data
                     if (uri != null) {
                         val contentResolver: ContentResolver = this.context!!.contentResolver
-                        val audioType = uri?.let { contentResolver.getType(it) }
-                        Log.d("FILETYPE", audioType)
+                        val audioType = uri.let { contentResolver.getType(it) }
                         //convert here?
                         //audio/mp4
                         if (audioType == "audio/wav" || audioType == "audio/x-wav") {
                             //supported format
-                            val audioBytes = uri?.let { contentResolver.openInputStream(it) }
+                            val audioBytes = uri.let { contentResolver.openInputStream(it) }
                             val result = extractFeaturesAndRunEvaluation(audioBytes)
                             if (result) {
                                 positiveAedesIdentification()
-                            }
-                            else {
+                            } else {
                                 negativeAedesIdentification()
                             }
                             return
-                        }
-                        else {
+                        } else {
                             //unsuported file format, will try to convert
-                            val audioFile = File(uri.path)
-                            AndroidAudioConverter.with(this.context!!).setFile(audioFile).setFormat(
-                                AudioFormat.WAV).setCallback(audioConverterCallback).convert()
+                            val path = uri.path
+                            if (path != null) {
+                                val audioFile = File(path)
+                                AndroidAudioConverter.with(this.context!!).setFile(audioFile).setFormat(
+                                    AudioFormat.WAV
+                                ).setCallback(audioConverterCallback).convert()
+                            }
 
                         }
-                    }
-                    else {
+                    } else {
                         //null uri
                         Log.d("EXCEPTION", "Null URI")
                     }
 
-                }
-                catch (e: Exception) {
+                } catch (e: Exception) {
                     Log.d("EXCEPTION", e.toString())
                 }
             }
@@ -255,12 +214,11 @@ class RecorderFragment : Fragment() {
     private fun extractFeaturesAndRunEvaluation(audioBytes: InputStream?): Boolean {
         try {
             val mNumFrames: Int
-            val mSampleRate: Int
             val mChannels: Int
 
             var predictedResult: Float = 0.0F
 
-            var wavFile: WavFile? = null
+            var wavFile: WavFile?
             wavFile = WavFile.openWavFile(audioBytes)
             mNumFrames = wavFile.numFrames.toInt()
             mChannels = wavFile.numChannels
@@ -281,16 +239,15 @@ class RecorderFragment : Fragment() {
             Log.d("MFCC", "Finished")
             return predictedResult > 0.95
         } catch (e: Exception) {
-            Log.d("EXCEPTION", e.localizedMessage)
+            Log.d("EXCEPTION", e.toString())
             return false
         }
-        return false
     }
 
     private fun flattenSpectrogram(input: Array<FloatArray>): FloatArray {
         var output: ArrayList<Float> = ArrayList<Float>();
         input[0].indices.forEach { i ->
-            input.indices.forEach{ j ->
+            input.indices.forEach { j ->
                 output.add(input[j][i])
             }
         }
@@ -302,36 +259,31 @@ class RecorderFragment : Fragment() {
             "Aedes!",
             "Identificamos um Aedes aegypti. Gostaria de compartilhar no mapa?",
             "Sim",
-            DialogInterface.OnClickListener { dialog, id ->
+            DialogInterface.OnClickListener { _, _ ->
                 // User clicked OK button
                 startActivity(Intent(requireContext(), ReportScreenActivity::class.java))
             },
             "Não",
-            DialogInterface.OnClickListener { dialog, id ->
+            DialogInterface.OnClickListener { _, _ ->
                 // User clicked OK button
             })
     }
 
     private fun negativeAedesIdentification() {
-        AlertUtils.displayAlert(requireContext(),
+        AlertUtils.displayAlert(
+            requireContext(),
             "Não é Aedes!",
             "Não identificamos um aedes na sua gravação.",
             "Ok",
-            DialogInterface.OnClickListener { dialog, id ->
+            DialogInterface.OnClickListener { _, _ ->
                 // User clicked OK button
             },
             null,
-            null)
+            null
+        )
     }
 
-    fun ByteArray.toDoubleSamples() = mapPairsToDoubles{ a, b ->
-        (a.toInt() and 0xFF or (b.toInt() shl 8)).toDouble()
-    }
-
-    inline fun ByteArray.mapPairsToDoubles(block: (Byte, Byte) -> Double)
-            = DoubleArray(size / 2){ i -> block(this[2 * i], this[2 * i + 1]) }
-
-    protected fun loadModelAndMakePredictions(meanMFCCValues : FloatArray) : Float {
+    protected fun loadModelAndMakePredictions(meanMFCCValues: FloatArray): Float {
         //load the TFLite model in 'MappedByteBuffer' format using TF Interpreter
         val tfliteModel: MappedByteBuffer =
             FileUtil.loadMappedFile(requireContext(), getModelPath())
@@ -344,7 +296,6 @@ class RecorderFragment : Fragment() {
         tflite = Interpreter(tfliteModel, tfliteOptions)
 
         //obtain the input and output tensor size required by the model
-        //for urban sound classification, input tensor should be of 1x40x1x1 shape
         val imageTensorIndex = 0
         val imageShape =
             tflite.getInputTensor(imageTensorIndex).shape()
@@ -355,23 +306,22 @@ class RecorderFragment : Fragment() {
         val probabilityDataType: DataType =
             tflite.getOutputTensor(probabilityTensorIndex).dataType()
 
-        //need to transform the MFCC 1d float buffer into 1x40x1x1 dimension tensor using TensorBuffer
+        //need to transform the MFCC 1d float buffer into 1x60x40 dimension tensor using TensorBuffer
         val inBuffer: TensorBuffer = TensorBuffer.createDynamic(imageDataType)
         inBuffer.loadArray(meanMFCCValues, imageShape)
         val inpBuffer: ByteBuffer = inBuffer.buffer
         val outputTensorBuffer: TensorBuffer =
             TensorBuffer.createFixedSize(probabilityShape, probabilityDataType)
-        //run the predictions with input and output buffer tensors to get probability values across the labels
+        //run the predictions with input and output buffer tensors to get probability values
         tflite.run(inpBuffer, outputTensorBuffer.buffer)
 
         val result = outputTensorBuffer.floatArray.first()
         val secondResult = outputTensorBuffer.floatArray[1]
-            Log.d("RESULT", "")
-            Log.d("0", result.toString())
-            Log.d("1", secondResult.toString())
+        Log.d("RESULT", "")
+        Log.d("0", result.toString())
+        Log.d("1", secondResult.toString())
 
         return result
-
     }
 
     fun getModelPath(): String {

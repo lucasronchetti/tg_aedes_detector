@@ -126,9 +126,6 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
                 arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION), LOCATION_PERMISSION_REQUEST_CODE)
             return
         }
-        if (googleMap == null) {
-            return
-        }
 
         //Set up location manager to fetch user's current location
         if (!this::locationManager.isInitialized) {
@@ -138,7 +135,7 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
                     requireActivity().getSystemService(LOCATION_SERVICE) as LocationManager
             }
             catch(e: Exception) {
-                Log.d("EXCEPTION", e.localizedMessage)
+                Log.d("EXCEPTION", e.toString())
             }
         }
 
@@ -183,10 +180,10 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
         private const val LOCATION_PERMISSION_REQUEST_CODE = 1
     }
 
-    override fun onPinsFetch(pinsList: ArrayList<UserReport>) {
-        for (pin in pinsList) {
+    override fun onPinsFetch(pinArray: ArrayList<UserReport>) {
+        for (pin in pinArray) {
             if (!pinsHasMap.contains(pin.pinKey)) {
-                var pinOptions = MarkerOptions()
+                val pinOptions = MarkerOptions()
                 pinOptions.position(LatLng(pin.latitude, pin.longitude))
                 val marker = googleMap.addMarker(pinOptions)
                 pinsHasMap[pin.pinKey] = marker
