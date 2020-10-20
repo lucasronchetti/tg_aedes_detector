@@ -6,16 +6,17 @@ import android.content.ContentResolver
 import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.AudioRecord
-import android.media.MediaRecorder
-import android.net.Uri
 import android.os.Bundle
-import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.Button
+import android.widget.TextView
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
@@ -29,47 +30,36 @@ import com.example.aedesdetector.spec.WavFile
 import com.example.aedesdetector.spec.WavRecorder
 import com.example.aedesdetector.ui.report_screen.ReportScreenActivity
 import com.example.aedesdetector.utils.AlertUtils
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.FileUtil
-import org.tensorflow.lite.support.common.TensorProcessor
-import org.tensorflow.lite.support.common.ops.NormalizeOp
-import org.tensorflow.lite.support.label.TensorLabel
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 import java.io.*
 import java.lang.Float.max
-import java.net.URI
 import java.nio.ByteBuffer
 import java.nio.MappedByteBuffer
 
 
 class RecorderFragment : Fragment() {
 
+    private val mainLooper = Looper.getMainLooper()
+
+
     private val REQ_CODE_PICK_SOUNDFILE = 12345
     private lateinit var recorderViewModel: RecorderViewModel
-
-    //current recorded audio
-    private lateinit var currentAudio: ByteArray
 
     //audio converter
     private lateinit var audioConverterCallback: IConvertCallback
 
     //audio recorder
-    private lateinit var filePath: String
-    private var bufferSizeInByte: Int = 0
-    private val bufferElements2Rec = 1024 // want to play 2048 (2K) since 2 bytes we use only 1024
-    private val bytesPerElement = 2 // 2 bytes in 16bit format
-    private val RECORDER_SAMPLERATE: Int = 8000
-    private val RECORDER_CHANNELS: Int = android.media.AudioFormat.CHANNEL_IN_STEREO
-    private val RECORDER_AUDIO_ENCODING: Int = android.media.AudioFormat.ENCODING_PCM_16BIT
-    private var recorder: AudioRecord? = null
-    private var recordingThread: Thread? = null
     private var isRecording = false
 
     private lateinit var recordButton: Button
 
-    private lateinit var positiveButton: Button
-    private lateinit var negativeButton: Button
+    private lateinit var loaderView: ConstraintLayout
+    private lateinit var loaderTextView: TextView
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -79,6 +69,11 @@ class RecorderFragment : Fragment() {
         recorderViewModel =
             ViewModelProviders.of(this).get(RecorderViewModel::class.java)
         val root = inflater.inflate(R.layout.fragment_recorder, container, false)
+
+        loaderView = root.findViewById(R.id.loader_view)
+        loaderTextView = root.findViewById(R.id.loader_text)
+        loaderView.visibility = View.GONE
+
         val openFileButton: Button = root.findViewById(R.id.open_file_button)
         openFileButton.setOnClickListener {
             val intent = Intent()
@@ -102,12 +97,7 @@ class RecorderFragment : Fragment() {
             override fun onSuccess(convertedFile: File) {
                 // audio converted!
                 val audioBytes = convertedFile.inputStream()
-                val result = extractFeaturesAndRunEvaluation(audioBytes)
-                if (result) {
-                    positiveAedesIdentification()
-                } else {
-                    negativeAedesIdentification()
-                }
+                readAudioBytesAndEvaluate(audioBytes)
             }
 
             override fun onFailure(error: java.lang.Exception) {
@@ -156,12 +146,7 @@ class RecorderFragment : Fragment() {
         Log.d("FILENAME", fileName)
         try {
             val audioBytes = File(fileName).inputStream()
-            val result = extractFeaturesAndRunEvaluation(audioBytes)
-            if (result) {
-                positiveAedesIdentification()
-            } else {
-                negativeAedesIdentification()
-            }
+            readAudioBytesAndEvaluate(audioBytes)
         } catch (e: Exception) {
             Log.d("EXCEPTION", e.toString())
         }
@@ -181,12 +166,7 @@ class RecorderFragment : Fragment() {
                         if (audioType == "audio/wav" || audioType == "audio/x-wav") {
                             //supported format
                             val audioBytes = uri.let { contentResolver.openInputStream(it) }
-                            val result = extractFeaturesAndRunEvaluation(audioBytes)
-                            if (result) {
-                                positiveAedesIdentification()
-                            } else {
-                                negativeAedesIdentification()
-                            }
+                            readAudioBytesAndEvaluate(audioBytes)
                             return
                         } else {
                             //unsuported file format, will try to convert
@@ -211,10 +191,32 @@ class RecorderFragment : Fragment() {
         }
     }
 
+    private fun readAudioBytesAndEvaluate(audioBytes: InputStream?) {
+        GlobalScope.launch {
+            Handler(mainLooper).post {
+                showLoader()
+            }
+            val result = extractFeaturesAndRunEvaluation(audioBytes)
+            if (result) {
+                Handler(mainLooper).post {
+                    dismissLoader()
+                    positiveAedesIdentification()
+                }
+            } else {
+                Handler(mainLooper).post {
+                    dismissLoader()
+                    negativeAedesIdentification()
+                }
+            }
+        }
+    }
+
     private fun extractFeaturesAndRunEvaluation(audioBytes: InputStream?): Boolean {
         try {
             val mNumFrames: Int
             val mChannels: Int
+
+            updateLoader("Abrindo arquivo...")
 
             var predictedResult: Float = 0.0F
 
@@ -227,8 +229,9 @@ class RecorderFragment : Fragment() {
             val mfccConvert = MFCC()
 
             for (channel in buffer) {
+                updateLoader("Processando áudio...")
                 val mfccInput = mfccConvert.processBulkSpectrograms(channel, 40)
-
+                updateLoader("Avaliando o áudio...")
                 for (element in mfccInput) {
                     val flattenedSpec = flattenSpectrogram(element)
                     predictedResult =
@@ -326,6 +329,28 @@ class RecorderFragment : Fragment() {
 
     fun getModelPath(): String {
         return "aedes_converted.tflite"
+    }
+
+    private fun showLoader() {
+        Handler(mainLooper).post {
+            loaderView.visibility = View.VISIBLE
+            requireActivity().window.setFlags(
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
+        }
+    }
+
+    private fun dismissLoader() {
+        Handler(mainLooper).post {
+            loaderView.visibility = View.GONE
+            requireActivity().window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
+        }
+    }
+
+    private fun updateLoader(loaderMessage: String) {
+        Handler(mainLooper).post {
+            loaderTextView.text = loaderMessage
+        }
     }
 }
 

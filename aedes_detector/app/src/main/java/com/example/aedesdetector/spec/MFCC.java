@@ -1,6 +1,5 @@
 package com.example.aedesdetector.spec;
 
-
 import java.util.Arrays;
 
 import static java.lang.Double.max;
