@@ -26,6 +26,7 @@ import cafe.adriel.androidaudioconverter.model.AudioFormat
 import com.example.aedesdetector.R
 import com.example.aedesdetector.spec.MFCC
 import com.example.aedesdetector.spec.WavFile
+import com.example.aedesdetector.spec.WavRecorder
 import com.example.aedesdetector.ui.report_screen.ReportScreenActivity
 import com.example.aedesdetector.utils.AlertUtils
 import org.tensorflow.lite.DataType
@@ -35,10 +36,7 @@ import org.tensorflow.lite.support.common.TensorProcessor
 import org.tensorflow.lite.support.common.ops.NormalizeOp
 import org.tensorflow.lite.support.label.TensorLabel
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
-import java.io.File
-import java.io.FileNotFoundException
-import java.io.FileOutputStream
-import java.io.IOException
+import java.io.*
 import java.lang.Float.max
 import java.net.URI
 import java.nio.ByteBuffer
@@ -62,7 +60,7 @@ class RecorderFragment : Fragment() {
     private val bufferElements2Rec = 1024 // want to play 2048 (2K) since 2 bytes we use only 1024
     private val bytesPerElement = 2 // 2 bytes in 16bit format
     private val RECORDER_SAMPLERATE: Int = 8000
-    private val RECORDER_CHANNELS: Int = android.media.AudioFormat.CHANNEL_IN_MONO
+    private val RECORDER_CHANNELS: Int = android.media.AudioFormat.CHANNEL_IN_STEREO
     private val RECORDER_AUDIO_ENCODING: Int = android.media.AudioFormat.ENCODING_PCM_16BIT
     private var recorder: AudioRecord? = null
     private var recordingThread: Thread? = null
@@ -151,21 +149,21 @@ class RecorderFragment : Fragment() {
     }
 
     private fun startRecording() {
-
-        filePath = "${requireContext().cacheDir}/${System.currentTimeMillis()}.pcm"
-        bufferSizeInByte = AudioRecord.getMinBufferSize(RECORDER_SAMPLERATE, RECORDER_CHANNELS, RECORDER_AUDIO_ENCODING)
-
-        recorder = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
-            RECORDER_SAMPLERATE, RECORDER_CHANNELS,
-            RECORDER_AUDIO_ENCODING, bufferElements2Rec * bytesPerElement
-        )
-
-        recorder!!.startRecording()
+//        filePath = "${requireContext().cacheDir}/${System.currentTimeMillis()}.wav"
+//        bufferSizeInByte = AudioRecord.getMinBufferSize(RECORDER_SAMPLERATE, RECORDER_CHANNELS, RECORDER_AUDIO_ENCODING)
+//
+//        recorder = AudioRecord(
+//            MediaRecorder.AudioSource.MIC,
+//            RECORDER_SAMPLERATE, RECORDER_CHANNELS,
+//            RECORDER_AUDIO_ENCODING, bufferElements2Rec * bytesPerElement
+//        )
+//
+//        recorder!!.startRecording()
         isRecording = true
         recordButton.setText("GRAVANDO")
-        recordingThread = Thread(Runnable { writeAudioDataToFile() }, "AudioRecorder Thread")
-        recordingThread!!.start()
+//        recordingThread = Thread(Runnable { writeAudioDataToFile() }, "AudioRecorder Thread")
+//        recordingThread!!.start()
+        WavRecorder.getInstance().startRecording(requireContext())
     }
 
     private fun writeAudioDataToFile() {
@@ -198,32 +196,39 @@ class RecorderFragment : Fragment() {
     }
 
     private fun stopRecording() {
-        if (recorder != null) {
+        val fileName = WavRecorder.getInstance().stopRecording()
+        Log.d("FILENAME", fileName)
+        try {
+                val audioBytes = File(fileName).inputStream()
+                if (audioBytes != null) {
+                    extractFeaturesAndRunEvaluation(audioBytes)
+                }
+        }
+        catch(e: Exception) {
+            Log.d("EXCEPTION", e.localizedMessage)
+        }
+//        if (recorder != null) {
             recordButton.setText("GRAVAR")
             isRecording = false
-            recorder?.stop()
-            recorder?.release()
-            recorder = null
-            recordingThread = null
-            try {
-                val contentResolver: ContentResolver = this.context!!.contentResolver
-                val audioBytes = contentResolver.openInputStream(Uri.parse(filePath))
-                if (audioBytes != null) {
-                    currentAudio = audioBytes.readBytes()
-                    val mfccConvert = MFCC()
-                    val audioDoubleSample = currentAudio.toDoubleSamples()
-                    val mfccInput = mfccConvert.processSpectrogram(audioDoubleSample)
-                    loadModelAndMakePredictions(mfccInput)
-                    Log.d("MFCC", mfccInput.toString())
-                }
-                else {
-                    Log.d("ERROR", "Null audio!")
-                }
-            }
-            catch(e: Exception) {
-                Log.d("EXCEPTION", e.localizedMessage)
-            }
-        }
+//            recorder?.stop()
+//            recorder?.release()
+//            recorder = null
+//            recordingThread = null
+//            try {
+//                val contentResolver: ContentResolver = this.context!!.contentResolver
+//                val uriPath = Uri.parse(filePath)
+//                val audioBytes = contentResolver.openInputStream(uriPath)
+//                if (audioBytes != null) {
+//                    extractFeaturesAndRunEvaluation(audioBytes)
+//                }
+//                else {
+//                    Log.d("ERROR", "Null audio!")
+//                }
+//            }
+//            catch(e: Exception) {
+//                Log.d("EXCEPTION", e.localizedMessage)
+//            }
+//        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -241,55 +246,8 @@ class RecorderFragment : Fragment() {
                         if (audioType == "audio/wav" || audioType == "audio/x-wav") {
                             //supported format
                             val audioBytes = uri?.let { contentResolver.openInputStream(it) }
-
-                            try {
-                                val mNumFrames: Int
-                                val mSampleRate: Int
-                                val mChannels: Int
-
-                                var predictedResult: Float = 0.0F
-
-                                var wavFile: WavFile? = null
-                                    wavFile = WavFile.openWavFile(audioBytes)
-                                    mNumFrames = wavFile.numFrames.toInt()
-                                    mChannels = wavFile.numChannels
-                                    val buffer = Array(mChannels) { DoubleArray(mNumFrames) }
-                                    wavFile.readFrames(buffer, mNumFrames, 0)
-                                val mfccConvert = MFCC()
-
-                                for (channel in buffer) {
-                                    val mfccInput = mfccConvert.processBulkSpectrograms(channel, 40)
-
-                                    for (element in mfccInput) {
-                                        val flattenedSpec = flattenSpectrogram(element)
-                                        predictedResult = max(loadModelAndMakePredictions(flattenedSpec), predictedResult)
-                                    }
-                                }
-                                Log.d("MFCC R", predictedResult.toString())
-                                Log.d("MFCC", "Finished")
-                                return
-                            }
-                            catch(e: Exception) {
-                                Log.d("EXCEPTION", e.localizedMessage)
-                                return
-                            }
-
-                            if (audioBytes != null) {
-                                currentAudio = audioBytes.readBytes()
-                                val mfccConvert = MFCC()
-                                val audioDoubleSample = currentAudio.toDoubleSamples()
-                                val mfccInput = mfccConvert.processBulkSpectrograms(audioDoubleSample, 40)
-
-                                for (element in mfccInput) {
-                                    val flattenedSpec = flattenSpectrogram(element)
-                                    loadModelAndMakePredictions(flattenedSpec)
-                                }
-
-                                Log.d("MFCC", mfccInput.toString())
-                            }
-                            else {
-                                Log.d("ERROR", "Null audio!")
-                            }
+                            extractFeaturesAndRunEvaluation(audioBytes)
+                            return
                         }
                         else {
                             //unsuported file format, will try to convert
@@ -310,6 +268,41 @@ class RecorderFragment : Fragment() {
                 }
             }
         }
+    }
+
+    private fun extractFeaturesAndRunEvaluation(audioBytes: InputStream?): Boolean {
+        try {
+            val mNumFrames: Int
+            val mSampleRate: Int
+            val mChannels: Int
+
+            var predictedResult: Float = 0.0F
+
+            var wavFile: WavFile? = null
+            wavFile = WavFile.openWavFile(audioBytes)
+            mNumFrames = wavFile.numFrames.toInt()
+            mChannels = wavFile.numChannels
+            val buffer = Array(mChannels) { DoubleArray(mNumFrames) }
+            wavFile.readFrames(buffer, mNumFrames, 0)
+            val mfccConvert = MFCC()
+
+            for (channel in buffer) {
+                val mfccInput = mfccConvert.processBulkSpectrograms(channel, 40)
+
+                for (element in mfccInput) {
+                    val flattenedSpec = flattenSpectrogram(element)
+                    predictedResult =
+                        max(loadModelAndMakePredictions(flattenedSpec), predictedResult)
+                }
+            }
+            Log.d("MFCC R", predictedResult.toString())
+            Log.d("MFCC", "Finished")
+            return true
+        } catch (e: Exception) {
+            Log.d("EXCEPTION", e.localizedMessage)
+            return false
+        }
+        return false
     }
 
     private fun flattenSpectrogram(input: Array<FloatArray>): FloatArray {
@@ -390,9 +383,11 @@ class RecorderFragment : Fragment() {
         tflite.run(inpBuffer, outputTensorBuffer.buffer)
 
         val result = outputTensorBuffer.floatArray.first()
-        if (result > 0.5) {
-            Log.d("RESULT", "TRUE")
-        }
+        val secondResult = outputTensorBuffer.floatArray[1]
+            Log.d("RESULT", "")
+            Log.d("0", result.toString())
+            Log.d("1", secondResult.toString())
+
         return result
 
     }
