@@ -26,12 +26,12 @@ import cafe.adriel.androidaudioconverter.callback.IConvertCallback
 import cafe.adriel.androidaudioconverter.model.AudioFormat
 import com.example.aedesdetector.R
 import com.example.aedesdetector.spec.MFCC
+import com.example.aedesdetector.spec.RTEvaluator
 import com.example.aedesdetector.spec.WavFile
 import com.example.aedesdetector.spec.WavRecorder
 import com.example.aedesdetector.ui.report_screen.ReportScreenActivity
 import com.example.aedesdetector.utils.AlertUtils
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.FileUtil
@@ -40,6 +40,8 @@ import java.io.*
 import java.lang.Float.max
 import java.nio.ByteBuffer
 import java.nio.MappedByteBuffer
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.coroutineContext
 
 
 class RecorderFragment : Fragment() {
@@ -136,17 +138,20 @@ class RecorderFragment : Fragment() {
     private fun startRecording() {
         isRecording = true
         recordButton.setText("GRAVANDO")
-        WavRecorder.getInstance().startRecording(requireContext())
+
+        RTEvaluator.startRecording(requireContext())
+        //WavRecorder.getInstance().startRecording(requireContext())
     }
 
     private fun stopRecording() {
-        val fileName = WavRecorder.getInstance().stopRecording()
+        RTEvaluator.stopRecording()
+        //val fileName = WavRecorder.getInstance().stopRecording()
         recordButton.setText("GRAVAR")
         isRecording = false
-        Log.d("FILENAME", fileName)
+        //Log.d("FILENAME", fileName)
         try {
-            val audioBytes = File(fileName).inputStream()
-            readAudioBytesAndEvaluate(audioBytes)
+            //val audioBytes = File(fileName).inputStream()
+            //readAudioBytesAndEvaluate(audioBytes)
         } catch (e: Exception) {
             Log.d("EXCEPTION", e.toString())
         }

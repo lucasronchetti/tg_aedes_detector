@@ -27,8 +27,6 @@ public final class WavRecorder {
     private Thread recordingThread = null;
     private boolean isRecording = false;
     private static Context mContext;
-    int[] bufferData;
-    int bytesRecorded;
 
     private static final WavRecorder INSTANCE = new WavRecorder();
 
