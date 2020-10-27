@@ -8,6 +8,7 @@ import android.graphics.Outline
 import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
+import android.transition.*
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -16,9 +17,9 @@ import android.view.ViewOutlineProvider
 import android.widget.Button
 import android.widget.ImageButton
 import androidx.annotation.RequiresApi
+import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.app.ActivityCompat
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.ViewModelProviders
 import com.example.aedesdetector.R
 import com.example.aedesdetector.models.UserReport
 import com.example.aedesdetector.ui.report_screen.ReportScreenActivity
@@ -29,7 +30,6 @@ import com.google.android.gms.maps.MapView
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.model.*
 import com.google.maps.android.heatmaps.HeatmapTileProvider
-import kotlinx.android.synthetic.main.fragment_map.*
 
 
 class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.OnMarkerClickListener  {
@@ -47,6 +47,8 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
     private var pinsHasMap = HashMap<String, Marker>()
 
     private lateinit var recordButton: Button
+    private lateinit var transitionsContainer: ConstraintLayout
+    private lateinit var recordingView: View
 
     override fun onCreateView(
             inflater: LayoutInflater,
@@ -69,17 +71,19 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
             setHeatmap()
         }
 
-        val image = root.findViewById<View>(R.id.button_view)
+        recordingView = root.findViewById(R.id.button_view)
+        transitionsContainer = root.findViewById(R.id.button_box)
+
         val curveRadius = 50F
 
-        image.outlineProvider = object : ViewOutlineProvider() {
+        recordingView.outlineProvider = object : ViewOutlineProvider() {
             @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
             override fun getOutline(view: View?, outline: Outline?) {
                 outline?.setRoundRect(0, 0, view!!.width, (view.height+curveRadius).toInt(), curveRadius)
             }
         }
 
-        image.clipToOutline = true
+        recordingView.clipToOutline = true
         recordButton = root.findViewById(R.id.record_button)
         recordButton.setOnClickListener {
             mPresenter.recordAudio()
@@ -90,10 +94,47 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
 
     override fun setRecordingState() {
         recordButton.text = "GRAVANDO"
+
+        val autoTransition = AutoTransition()
+        autoTransition.duration = 1000
+
+        TransitionManager.beginDelayedTransition(
+            transitionsContainer, TransitionSet()
+                .addTransition(ChangeBounds())
+                .addTransition(autoTransition)
+        )
+
+        val params: ViewGroup.LayoutParams = transitionsContainer.layoutParams
+        params.height = ViewGroup.LayoutParams.MATCH_PARENT
+        transitionsContainer.layoutParams = params
+
+        val viewParams: ViewGroup.LayoutParams = recordingView.layoutParams
+        viewParams.height = ViewGroup.LayoutParams.MATCH_PARENT
+        recordingView.layoutParams = viewParams
+
     }
 
     override fun setStoppedState() {
         recordButton.text = "GRAVAR"
+
+        val autoTransition = AutoTransition()
+        autoTransition.duration = 1000
+
+        TransitionManager.beginDelayedTransition(
+            transitionsContainer, TransitionSet()
+                .addTransition(ChangeBounds())
+                .addTransition(autoTransition)
+        )
+
+        val params: ViewGroup.LayoutParams = transitionsContainer.layoutParams
+        params.height = ViewGroup.LayoutParams.WRAP_CONTENT
+        transitionsContainer.layoutParams = params
+
+        val viewSize = 140 * resources.displayMetrics.density
+
+        val viewParams: ViewGroup.LayoutParams = recordingView.layoutParams
+        viewParams.height = viewSize.toInt()
+        recordingView.layoutParams = viewParams
     }
 
     override fun onDetectionPositive() {
