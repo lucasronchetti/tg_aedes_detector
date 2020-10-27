@@ -1,19 +1,28 @@
 package com.example.aedesdetector.ui.map
 
 import android.content.Context.LOCATION_SERVICE
+import android.content.DialogInterface
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Outline
 import android.location.LocationManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.widget.Button
+import android.widget.ImageButton
+import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProviders
 import com.example.aedesdetector.R
 import com.example.aedesdetector.models.UserReport
+import com.example.aedesdetector.ui.report_screen.ReportScreenActivity
+import com.example.aedesdetector.utils.AlertUtils
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.MapView
@@ -25,6 +34,7 @@ import kotlinx.android.synthetic.main.fragment_map.*
 
 class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.OnMarkerClickListener  {
 
+    private lateinit var mPresenter: MapPresenter
     private lateinit var mapView: MapView
     private lateinit var googleMap: GoogleMap
     private lateinit var locationManager: LocationManager
@@ -36,11 +46,14 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
 
     private var pinsHasMap = HashMap<String, Marker>()
 
+    private lateinit var recordButton: Button
+
     override fun onCreateView(
             inflater: LayoutInflater,
             container: ViewGroup?,
             savedInstanceState: Bundle?
     ): View? {
+        mPresenter = MapPresenter(this, requireContext(), requireActivity())
         val root = inflater.inflate(R.layout.fragment_map, container, false)
 
         mapView = root.findViewById(R.id.map_view)
@@ -48,15 +61,68 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
         mapView.onResume()
         mapView.getMapAsync(this)
 
-        root.findViewById<Button>(R.id.pin_button).setOnClickListener {
+        root.findViewById<ImageButton>(R.id.pin_button).setOnClickListener {
             setPins()
         }
 
-        root.findViewById<Button>(R.id.heatmap_button).setOnClickListener {
+        root.findViewById<ImageButton>(R.id.heatmap_button).setOnClickListener {
             setHeatmap()
         }
 
+        val image = root.findViewById<View>(R.id.button_view)
+        val curveRadius = 50F
+
+        image.outlineProvider = object : ViewOutlineProvider() {
+            @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
+            override fun getOutline(view: View?, outline: Outline?) {
+                outline?.setRoundRect(0, 0, view!!.width, (view.height+curveRadius).toInt(), curveRadius)
+            }
+        }
+
+        image.clipToOutline = true
+        recordButton = root.findViewById(R.id.record_button)
+        recordButton.setOnClickListener {
+            mPresenter.recordAudio()
+        }
+
         return root
+    }
+
+    override fun setRecordingState() {
+        recordButton.text = "GRAVANDO"
+    }
+
+    override fun setStoppedState() {
+        recordButton.text = "GRAVAR"
+    }
+
+    override fun onDetectionPositive() {
+        AlertUtils.displayAlert(requireContext(),
+            "Aedes!",
+            "Identificamos um Aedes aegypti. Gostaria de compartilhar no mapa?",
+            "Sim",
+            DialogInterface.OnClickListener { _, _ ->
+                // User clicked OK button
+                startActivity(Intent(requireContext(), ReportScreenActivity::class.java))
+            },
+            "Não",
+            DialogInterface.OnClickListener { _, _ ->
+                // User clicked OK button
+            })
+    }
+
+    override fun onDetectionNegative() {
+        AlertUtils.displayAlert(
+            requireContext(),
+            "Não é Aedes!",
+            "Não identificamos um aedes na sua gravação.",
+            "Ok",
+            DialogInterface.OnClickListener { _, _ ->
+                // User clicked OK button
+            },
+            null,
+            null
+        )
     }
 
     private fun setHeatmap() {
@@ -110,7 +176,7 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
     override fun onResume() {
         super.onResume()
         if (this::googleMap.isInitialized) {
-            MapPresenter(this, requireContext()).fetchPinsWithMapLocation(googleMap.cameraPosition.target, 15.0f)
+            mPresenter.fetchPinsWithMapLocation(googleMap.cameraPosition.target, 15.0f)
         }
     }
 
@@ -147,7 +213,7 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
                 LatLng(-16.1815243,-51.6828065),
                 4.0f
             ))
-            MapPresenter(this, requireContext()).fetchPinsWithMapLocation(LatLng(-16.1815243,-51.6828065), 15.0f)
+            mPresenter.fetchPinsWithMapLocation(LatLng(-16.1815243,-51.6828065), 15.0f)
         }
         else {
             val latLngLocation = LatLng(location.latitude, location.longitude)
@@ -157,7 +223,7 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
                     15.0f
                 )
             )
-            MapPresenter(this, requireContext()).fetchPinsWithMapLocation(latLngLocation, 15.0f)
+           mPresenter.fetchPinsWithMapLocation(latLngLocation, 15.0f)
         }
     }
 

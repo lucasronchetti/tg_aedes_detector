@@ -4,16 +4,18 @@ import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Handler
 import android.util.Log
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.Tensor
 import org.tensorflow.lite.support.common.FileUtil
+import org.tensorflow.lite.support.common.TensorProcessor
+import org.tensorflow.lite.support.common.ops.NormalizeOp
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
-import java.lang.Float
 import java.nio.ByteBuffer
 import java.nio.MappedByteBuffer
 import java.util.*
+import kotlin.concurrent.schedule
 
 object RTEvaluator {
 
@@ -33,6 +35,10 @@ object RTEvaluator {
     private var audioQueue: Queue<ByteArray>
     private var spectrogramQueue: Queue<FloatArray>
 
+    //Timer
+    private lateinit var timeoutTimerTask: TimerTask
+    private val TIMEOUT_MILIS: Long = 15000
+
     //Application context
     private lateinit var mContext: Context
 
@@ -42,6 +48,9 @@ object RTEvaluator {
     lateinit var imageShape: IntArray
     lateinit var probabilityShape: IntArray
     lateinit var probabilityDataType: DataType
+
+    lateinit var onPositiveDetection: () -> Unit
+    lateinit var onNegativeDetection: () -> Unit
 
     init {
         bufferSize = AudioRecord.getMinBufferSize(
@@ -53,7 +62,26 @@ object RTEvaluator {
 
         audioQueue = LinkedList<ByteArray>()
         spectrogramQueue = LinkedList<FloatArray>()
+    }
 
+    fun startRecording(context: Context, onPositive: () -> Unit, onNegative: () -> Unit) {
+        mContext = context
+        onPositiveDetection = onPositive
+        onNegativeDetection = onNegative
+        loadTensorflow()
+        recorder = AudioRecord(
+            MediaRecorder.AudioSource.MIC,
+            RECORDER_SAMPLERATE,
+            RECORDER_CHANNELS,
+            RECORDER_AUDIO_ENCODING,
+            bufferSize
+        )
+        val i = recorder.state
+        if (i == 1) recorder.startRecording()
+        isRecording = true
+        timeoutTimerTask = Timer().schedule(TIMEOUT_MILIS) {
+            stopRecording()
+        }
         recordingThread = Thread(Runnable {
             while (!recordingThread.isInterrupted)
                 saveDataToEvaluatorBuffer()
@@ -66,42 +94,23 @@ object RTEvaluator {
             while (!tensorFlowThread.isInterrupted)
                 fetchSpectrogramAndEvaluateWithTensorFlow()
         }, "TensorFlow Thread")
-    }
-
-    fun startRecording(context: Context) {
-        mContext = context
-        loadTensorflow()
-        recorder = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
-            RECORDER_SAMPLERATE,
-            RECORDER_CHANNELS,
-            RECORDER_AUDIO_ENCODING,
-            bufferSize
-        )
-        val i = recorder.state
-        if (i == 1) recorder.startRecording()
-        isRecording = true
         recordingThread.start()
         spectrogramThread.start()
         tensorFlowThread.start()
     }
-    
+
     fun stopRecording() {
-        if (null != recorder) {
-            isRecording = false
-            val i = recorder.state
-            if (i == 1) recorder.stop()
-            recorder.release()
-            recordingThread.interrupt()
-        }
+        isRecording = false
+        timeoutTimerTask.cancel()
+        val i = recorder.state
+        if (i == 1) recorder.stop()
+        recorder.release()
+        recordingThread.interrupt()
     }
 
     private fun saveDataToEvaluatorBuffer() {
         val data = ByteArray(bufferSize)
-        var read = 0
-        read = recorder.read(data, 0, bufferSize)
-        if (read > 0) {
-        }
+        var read = recorder.read(data, 0, bufferSize)
         if (AudioRecord.ERROR_INVALID_OPERATION != read) {
             try {
                 audioQueue.add(data)
@@ -122,7 +131,7 @@ object RTEvaluator {
                     spectrogramQueue.add(flattenSpectrogram(element))
                 }
             }
-            else if (!isRecording && audioQueue.isEmpty()) {
+            else if (!isRecording && audioQueue.size <= 0) {
                 spectrogramThread.interrupt()
             }
         } catch (e: Exception) {
@@ -135,9 +144,18 @@ object RTEvaluator {
             val data = spectrogramQueue.poll()
             if (data != null) {
                 val predictedResult = evaluateSample(data)
+                if (predictedResult >= 0.9) {
+
+                    stopRecording()
+                    recordingThread.interrupt()
+                    spectrogramThread.interrupt()
+                    tensorFlowThread.interrupt()
+                    onPositiveDetection()
+                }
             }
-            else if (!isRecording && audioQueue.isEmpty() && spectrogramQueue.isEmpty()) {
+            else if (!isRecording && audioQueue.size <= 0 && spectrogramQueue.size <= 0) {
                 tensorFlowThread.interrupt()
+                onNegativeDetection()
             }
         } catch (e: Exception) {
             Log.d("EXCEPTION", e.toString())
@@ -184,12 +202,17 @@ object RTEvaluator {
             TensorBuffer.createFixedSize(probabilityShape, probabilityDataType)
         //run the predictions with input and output buffer tensors to get probability values
         tflite.run(inpBuffer, outputTensorBuffer.buffer)
-
+        
         val result = outputTensorBuffer.floatArray.first()
         val secondResult = outputTensorBuffer.floatArray[1]
         if (result >= 0.9) {
             Log.d("DETECTED", result.toString())
             Log.d("ACCURACY", secondResult.toString())
+            val probabilityProcessor: TensorProcessor = TensorProcessor.Builder()
+                .add(NormalizeOp(0.0f, 255.0f)).build()
+
+            val finalResult = probabilityProcessor.process(outputTensorBuffer)
+            Log.d("BUFFER", finalResult.toString())
         }
 
         return result

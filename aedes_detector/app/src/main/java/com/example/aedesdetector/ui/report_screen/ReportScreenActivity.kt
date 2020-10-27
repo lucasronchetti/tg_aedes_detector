@@ -155,9 +155,10 @@ class ReportScreenActivity: AppCompatActivity(), ReportScreenContract.View, OnMa
     }
 
     private fun getUserLocationWithError(userLocation: LatLng): LatLng {
-        //20 meters error can be inserted
-        val latError = Random(System.nanoTime()).nextDouble(-0.0009, 0.0009)
-        val lonError = Random(System.nanoTime()).nextDouble(-0.0009, 0.0009)
+        //Small error can be inserted
+        val latError = Random(System.nanoTime()).nextDouble(-0.0007, 0.0007)
+        val lonError = Random(System.nanoTime()).nextDouble(-0.0007, 0.0007)
+
         return LatLng(userLocation.latitude + latError, userLocation.longitude + lonError)
     }
 

@@ -8,9 +8,14 @@ interface MapContract {
     interface View{
         fun onPinsFetch(pinArray: ArrayList<UserReport>)
         fun onErrorFetchingPins(message: String)
+        fun setRecordingState()
+        fun setStoppedState()
+        fun onDetectionPositive()
+        fun onDetectionNegative()
     }
 
     interface Presenter{
         fun fetchPinsWithMapLocation(mapLocation: LatLng, radius: Float)
+        fun recordAudio()
     }
 }

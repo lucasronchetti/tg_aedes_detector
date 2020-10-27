@@ -28,7 +28,6 @@ import com.example.aedesdetector.R
 import com.example.aedesdetector.spec.MFCC
 import com.example.aedesdetector.spec.RTEvaluator
 import com.example.aedesdetector.spec.WavFile
-import com.example.aedesdetector.spec.WavRecorder
 import com.example.aedesdetector.ui.report_screen.ReportScreenActivity
 import com.example.aedesdetector.utils.AlertUtils
 import kotlinx.coroutines.*
@@ -40,8 +39,6 @@ import java.io.*
 import java.lang.Float.max
 import java.nio.ByteBuffer
 import java.nio.MappedByteBuffer
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.coroutineContext
 
 
 class RecorderFragment : Fragment() {
@@ -139,7 +136,7 @@ class RecorderFragment : Fragment() {
         isRecording = true
         recordButton.setText("GRAVANDO")
 
-        RTEvaluator.startRecording(requireContext())
+        //RTEvaluator.startRecording(requireContext())
         //WavRecorder.getInstance().startRecording(requireContext())
     }
 
