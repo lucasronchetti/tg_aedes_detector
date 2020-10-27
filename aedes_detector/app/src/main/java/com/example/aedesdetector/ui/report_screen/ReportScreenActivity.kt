@@ -105,23 +105,23 @@ class ReportScreenActivity: AppCompatActivity(), ReportScreenContract.View, OnMa
     }
 
     override fun onMapClick(p0: LatLng?) {
-        try {
-            mapCircle?.remove()
-            val options = CircleOptions()
-            options.center(
-                LatLng(
-                    p0!!.latitude,
-                    p0.longitude
-                )
-            )
-            options.radius(90.0)
-            options.strokeColor(R.color.colorAccent)
-            options.zIndex(1f)
-            mapCircle = googleMap.addCircle(options)
-        }
-        catch(e: Exception) {
-
-        }
+//        try {
+//            mapCircle?.remove()
+//            val options = CircleOptions()
+//            options.center(
+//                LatLng(
+//                    p0!!.latitude,
+//                    p0.longitude
+//                )
+//            )
+//            options.radius(90.0)
+//            options.strokeColor(R.color.colorAccent)
+//            options.zIndex(1f)
+//            mapCircle = googleMap.addCircle(options)
+//        }
+//        catch(e: Exception) {
+//
+//        }
     }
 
     override fun onSuccess() {

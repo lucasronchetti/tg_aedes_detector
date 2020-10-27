@@ -4,7 +4,6 @@ import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import android.os.Handler
 import android.util.Log
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
@@ -12,10 +11,16 @@ import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.common.TensorProcessor
 import org.tensorflow.lite.support.common.ops.NormalizeOp
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
+import java.lang.reflect.Array.getShort
 import java.nio.ByteBuffer
 import java.nio.MappedByteBuffer
 import java.util.*
 import kotlin.concurrent.schedule
+import kotlin.experimental.and
+import kotlin.experimental.or
+import kotlin.math.abs
+import kotlin.math.log10
+
 
 object RTEvaluator {
 
@@ -50,6 +55,7 @@ object RTEvaluator {
     lateinit var probabilityDataType: DataType
 
     lateinit var onPositiveDetection: () -> Unit
+    lateinit var onFinishingDetection: () -> Unit
     lateinit var onNegativeDetection: () -> Unit
 
     init {
@@ -64,9 +70,10 @@ object RTEvaluator {
         spectrogramQueue = LinkedList<FloatArray>()
     }
 
-    fun startRecording(context: Context, onPositive: () -> Unit, onNegative: () -> Unit) {
+    fun startRecording(context: Context, onPositive: () -> Unit, onFinishedRecording: () -> Unit, onNegative: () -> Unit) {
         mContext = context
         onPositiveDetection = onPositive
+        onFinishingDetection = onFinishedRecording
         onNegativeDetection = onNegative
         loadTensorflow()
         recorder = AudioRecord(
@@ -102,6 +109,7 @@ object RTEvaluator {
     fun stopRecording() {
         isRecording = false
         timeoutTimerTask.cancel()
+        onFinishingDetection()
         val i = recorder.state
         if (i == 1) recorder.stop()
         recorder.release()
@@ -110,7 +118,7 @@ object RTEvaluator {
 
     private fun saveDataToEvaluatorBuffer() {
         val data = ByteArray(bufferSize)
-        var read = recorder.read(data, 0, bufferSize)
+        val read = recorder.read(data, 0, bufferSize)
         if (AudioRecord.ERROR_INVALID_OPERATION != read) {
             try {
                 audioQueue.add(data)

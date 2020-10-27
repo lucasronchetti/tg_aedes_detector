@@ -17,6 +17,7 @@ import com.google.firebase.firestore.Query
 class MapPresenter(val mView: MapContract.View, val context: Context, val activity: FragmentActivity): MapContract.Presenter {
 
     private var isRecording = false
+    private var isProcessing = false
 
     override fun recordAudio() {
         if (!isRecording) {
@@ -35,7 +36,9 @@ class MapPresenter(val mView: MapContract.View, val context: Context, val activi
                 )
                 ActivityCompat.requestPermissions(activity, permissions, 0)
             } else {
-                startRecording()
+                if (!isProcessing) {
+                    startRecording()
+                }
             }
         } else {
             stopRecording()
@@ -78,6 +81,7 @@ class MapPresenter(val mView: MapContract.View, val context: Context, val activi
 
     private fun startRecording() {
         isRecording = true
+        isProcessing = true
         mView.setRecordingState()
         RTEvaluator.startRecording(context, {
            activity.runOnUiThread {
@@ -87,6 +91,12 @@ class MapPresenter(val mView: MapContract.View, val context: Context, val activi
            }
         }, {
             activity.runOnUiThread {
+                mView.setFinishingState()
+            }
+        }
+            ,{
+            activity.runOnUiThread {
+                isProcessing = false
                 isRecording = false
                 mView.setStoppedState()
                 mView.onDetectionNegative()

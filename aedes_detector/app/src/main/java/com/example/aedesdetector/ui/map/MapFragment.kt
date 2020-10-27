@@ -16,6 +16,7 @@ import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.widget.Button
 import android.widget.ImageButton
+import android.widget.TextView
 import androidx.annotation.RequiresApi
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.app.ActivityCompat
@@ -46,9 +47,10 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
 
     private var pinsHasMap = HashMap<String, Marker>()
 
-    private lateinit var recordButton: Button
+    private lateinit var recordButton: View
     private lateinit var transitionsContainer: ConstraintLayout
     private lateinit var recordingView: View
+    private lateinit var recordingText: TextView
 
     override fun onCreateView(
             inflater: LayoutInflater,
@@ -84,6 +86,7 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
         }
 
         recordingView.clipToOutline = true
+        recordingText = root.findViewById(R.id.record_view_text)
         recordButton = root.findViewById(R.id.record_button)
         recordButton.setOnClickListener {
             mPresenter.recordAudio()
@@ -93,7 +96,7 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
     }
 
     override fun setRecordingState() {
-        recordButton.text = "GRAVANDO"
+        recordingText.text = "Analisando!"
 
         val autoTransition = AutoTransition()
         autoTransition.duration = 1000
@@ -114,8 +117,12 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
 
     }
 
+    override fun setFinishingState() {
+        recordingText.text = "Finalizando análise..."
+    }
+
     override fun setStoppedState() {
-        recordButton.text = "GRAVAR"
+        recordingText.text = "Toque no botão para iniciar o reconhecimento!"
 
         val autoTransition = AutoTransition()
         autoTransition.duration = 1000
@@ -180,6 +187,7 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
             }
             val provider = HeatmapTileProvider.Builder()
                 .data(latLngList)
+                .radius(40)
                 .build()
 
             heatmapOverlay = googleMap.addTileOverlay(TileOverlayOptions().tileProvider(provider))

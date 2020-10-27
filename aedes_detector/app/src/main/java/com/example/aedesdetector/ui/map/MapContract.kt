@@ -9,6 +9,7 @@ interface MapContract {
         fun onPinsFetch(pinArray: ArrayList<UserReport>)
         fun onErrorFetchingPins(message: String)
         fun setRecordingState()
+        fun setFinishingState()
         fun setStoppedState()
         fun onDetectionPositive()
         fun onDetectionNegative()

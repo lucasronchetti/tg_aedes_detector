@@ -1,14 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <!--  Non focused states
-     -->
-    <item android:state_focused="false" android:state_selected="false" android:state_pressed="false" android:drawable="@color/white" />
-    <item android:state_focused="false" android:state_selected="true" android:state_pressed="false" android:drawable="@color/white" />
-    <!--  Focused states
-     -->
-    <item android:state_focused="true" android:state_selected="false" android:state_pressed="false" android:drawable="@color/colorPrimary" />
-    <item android:state_focused="true" android:state_selected="true" android:state_pressed="false" android:drawable="@color/colorPrimary" />
-    <!--  Pressed
-     -->
-    <item android:state_pressed="true" android:drawable="@drawable/button_press" />
-</selector>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+
+    <corners android:radius="50dp"/> // if you want clear round shape then make radius size is half of your  button`s height.
+    <solid android:color="@color/colorPrimary"/> // Button Colour
+    <padding
+        android:bottom="5dp"
+        android:left="10dp"
+        android:right="10dp"
+        android:top="5dp"/>
+
+</shape>
