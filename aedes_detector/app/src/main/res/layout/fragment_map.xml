@@ -55,7 +55,7 @@
             android:id="@+id/record_view_text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Toque no botão para iniciar o reconhecimento!"
+            android:text="Toque no botão para iniciar o reconhecimento"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toTopOf="@id/record_button"
             app:layout_constraintStart_toStartOf="parent"

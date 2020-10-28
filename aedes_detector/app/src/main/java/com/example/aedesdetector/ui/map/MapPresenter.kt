@@ -82,12 +82,15 @@ class MapPresenter(val mView: MapContract.View, val context: Context, val activi
         RTEvaluator.startRecording(context, {
            activity.runOnUiThread {
                isRecording = false
+               isProcessing = false
                mView.setStoppedState()
                mView.onDetectionPositive()
            }
         }, {
             activity.runOnUiThread {
-                mView.setFinishingState()
+                if (isProcessing) {
+                    mView.setFinishingState()
+                }
             }
         }
             ,{

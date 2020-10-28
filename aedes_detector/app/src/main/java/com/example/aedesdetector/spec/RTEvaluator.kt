@@ -14,6 +14,7 @@ import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 import java.nio.ByteBuffer
 import java.nio.MappedByteBuffer
 import java.util.*
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.concurrent.schedule
 
 
@@ -32,8 +33,8 @@ object RTEvaluator {
     private lateinit var recordingThread: Thread
     private lateinit var spectrogramThread: Thread
     private lateinit var tensorFlowThread: Thread
-    private var audioQueue: Queue<ByteArray>
-    private var spectrogramQueue: Queue<FloatArray>
+    private var audioQueue: ConcurrentLinkedQueue<ByteArray>
+    private var spectrogramQueue: ConcurrentLinkedQueue<FloatArray>
 
     //Timer
     private lateinit var timeoutTimerTask: TimerTask
@@ -61,8 +62,8 @@ object RTEvaluator {
         ) * 3
         audioData = ByteArray(bufferSize)
 
-        audioQueue = LinkedList<ByteArray>()
-        spectrogramQueue = LinkedList<FloatArray>()
+        audioQueue = ConcurrentLinkedQueue<ByteArray>()
+        spectrogramQueue = ConcurrentLinkedQueue<FloatArray>()
     }
 
     fun startRecording(context: Context, onPositive: () -> Unit, onFinishedRecording: () -> Unit, onNegative: () -> Unit) {
@@ -147,8 +148,7 @@ object RTEvaluator {
             val data = spectrogramQueue.poll()
             if (data != null) {
                 val predictedResult = evaluateSample(data)
-                if (predictedResult >= 0.9) {
-
+                if (predictedResult) {
                     stopRecording()
                     recordingThread.interrupt()
                     spectrogramThread.interrupt()
@@ -198,7 +198,7 @@ object RTEvaluator {
         inBuffer = TensorBuffer.createDynamic(imageDataType)
     }
 
-    private fun evaluateSample(meanMFCCValues: FloatArray): kotlin.Float {
+    private fun evaluateSample(meanMFCCValues: FloatArray): Boolean {
         inBuffer.loadArray(meanMFCCValues, imageShape)
         val inpBuffer: ByteBuffer = inBuffer.buffer
         val outputTensorBuffer: TensorBuffer =
@@ -206,19 +206,23 @@ object RTEvaluator {
         //run the predictions with input and output buffer tensors to get probability values
         tflite.run(inpBuffer, outputTensorBuffer.buffer)
         
-        val result = outputTensorBuffer.floatArray.first()
-        val secondResult = outputTensorBuffer.floatArray[1]
-        if (result >= 0.9) {
-            Log.d("DETECTED", result.toString())
-            Log.d("ACCURACY", secondResult.toString())
+        val probability = outputTensorBuffer.floatArray.first()
+        val accuracy = outputTensorBuffer.floatArray[1]
+        Log.d("PROB", probability.toString())
+        Log.d("ACCURACY", accuracy.toString())
+        if (probability >= 0.9 && accuracy >= 0.5) {
+            Log.d("DETECTED", probability.toString())
+            Log.d("ACCURACY", accuracy.toString())
             val probabilityProcessor: TensorProcessor = TensorProcessor.Builder()
                 .add(NormalizeOp(0.0f, 255.0f)).build()
 
             val finalResult = probabilityProcessor.process(outputTensorBuffer)
             Log.d("BUFFER", finalResult.toString())
+
+            return true
         }
 
-        return result
+        return false
     }
 
     fun getModelPath(): String {

@@ -31,6 +31,7 @@ import com.google.android.gms.maps.MapView
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.model.*
 import com.google.maps.android.heatmaps.HeatmapTileProvider
+import java.text.SimpleDateFormat
 
 
 class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.OnMarkerClickListener {
@@ -96,7 +97,7 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
     }
 
     override fun setRecordingState() {
-        recordingText.text = "Analisando!"
+        recordingText.text = "Analisando..."
 
         val autoTransition = AutoTransition()
         autoTransition.duration = 1000
@@ -122,7 +123,7 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
     }
 
     override fun setStoppedState() {
-        recordingText.text = "Toque no botão para iniciar o reconhecimento!"
+        recordingText.text = "Toque no botão para iniciar o reconhecimento"
 
         val autoTransition = AutoTransition()
         autoTransition.duration = 1000
@@ -304,6 +305,7 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
             if (!pinsHasMap.contains(pin.pinKey)) {
                 val pinOptions = MarkerOptions()
                 pinOptions.position(LatLng(pin.latitude, pin.longitude))
+                pinOptions.title(SimpleDateFormat("dd/MM/yyyy - HH:mm").format(pin.reportDate))
                 val marker = googleMap.addMarker(pinOptions)
                 pinsHasMap[pin.pinKey] = marker
             }
