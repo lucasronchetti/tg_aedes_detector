@@ -1,7 +1,7 @@
 package com.example.aedesdetector.ui.map
 
 import com.example.aedesdetector.models.UserReport
-import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.LatLngBounds
 
 interface MapContract {
 
@@ -16,7 +16,7 @@ interface MapContract {
     }
 
     interface Presenter{
-        fun fetchPinsWithMapLocation(mapLocation: LatLng, radius: Float)
+        fun fetchPinsWithMapLocation(mapLocation: LatLngBounds)
         fun recordAudio()
     }
 }

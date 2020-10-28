@@ -33,7 +33,7 @@ import com.google.android.gms.maps.model.*
 import com.google.maps.android.heatmaps.HeatmapTileProvider
 
 
-class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.OnMarkerClickListener  {
+class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.OnMarkerClickListener {
 
     private lateinit var mPresenter: MapPresenter
     private lateinit var mapView: MapView
@@ -225,7 +225,7 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
     override fun onResume() {
         super.onResume()
         if (this::googleMap.isInitialized) {
-            mPresenter.fetchPinsWithMapLocation(googleMap.cameraPosition.target, 15.0f)
+            mPresenter.fetchPinsWithMapLocation(googleMap.projection.visibleRegion.latLngBounds)
         }
     }
 
@@ -262,7 +262,7 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
                 LatLng(-16.1815243,-51.6828065),
                 4.0f
             ))
-            mPresenter.fetchPinsWithMapLocation(LatLng(-16.1815243,-51.6828065), 15.0f)
+            mPresenter.fetchPinsWithMapLocation(googleMap.projection.visibleRegion.latLngBounds)
         }
         else {
             val latLngLocation = LatLng(location.latitude, location.longitude)
@@ -272,7 +272,11 @@ class MapFragment : Fragment(), MapContract.View, OnMapReadyCallback, GoogleMap.
                     15.0f
                 )
             )
-           mPresenter.fetchPinsWithMapLocation(latLngLocation, 15.0f)
+           mPresenter.fetchPinsWithMapLocation(googleMap.projection.visibleRegion.latLngBounds)
+        }
+
+        googleMap.setOnCameraIdleListener {
+            mPresenter.fetchPinsWithMapLocation(googleMap.projection.visibleRegion.latLngBounds)
         }
     }
 

@@ -10,6 +10,7 @@ import androidx.fragment.app.FragmentActivity
 import com.example.aedesdetector.models.UserReport
 import com.example.aedesdetector.spec.RTEvaluator
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.LatLngBounds
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.GeoPoint
 import com.google.firebase.firestore.Query
@@ -45,8 +46,13 @@ class MapPresenter(val mView: MapContract.View, val context: Context, val activi
         }
     }
 
-    override fun fetchPinsWithMapLocation(mapLocation: LatLng, radius: Float) {
-       val query = getNearestLocation(mapLocation.latitude, mapLocation.longitude, 10.0)
+    override fun fetchPinsWithMapLocation(mapLocation: LatLngBounds) {
+
+        if (mapLocation.center.latitude == 0.0 && mapLocation.center.longitude == 0.0) {
+            return
+        }
+
+       val query = getNearestLocation(mapLocation.southwest, mapLocation.northeast)
 
         query.get().addOnSuccessListener { pins ->
             var pinArray = ArrayList<UserReport>()
@@ -59,19 +65,9 @@ class MapPresenter(val mView: MapContract.View, val context: Context, val activi
         }
     }
 
-    private fun getNearestLocation(latitude: Double, longitude: Double, distance: Double): Query {
-        // ~1 mile of lat and lon in degrees
-        val lat = 0.0144927536231884
-        val lon = 0.0181818181818182
-
-        val lowerLat = latitude - (lat * distance)
-        val lowerLon = longitude - (lon * distance)
-
-        val greaterLat = latitude + (lat * distance)
-        val greaterLon = longitude + (lon * distance)
-
-        val lesserGeopoint = GeoPoint(lowerLat, lowerLon)
-        val greaterGeopoint = GeoPoint(greaterLat, greaterLon)
+    private fun getNearestLocation(southWest: LatLng, northEast: LatLng): Query {
+        val lesserGeopoint = GeoPoint(southWest.latitude, southWest.longitude)
+        val greaterGeopoint = GeoPoint(northEast.latitude, northEast.longitude)
 
         val docRef = FirebaseFirestore.getInstance().collection("pins")
         return docRef

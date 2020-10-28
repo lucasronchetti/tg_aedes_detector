@@ -11,15 +11,10 @@ import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.common.TensorProcessor
 import org.tensorflow.lite.support.common.ops.NormalizeOp
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
-import java.lang.reflect.Array.getShort
 import java.nio.ByteBuffer
 import java.nio.MappedByteBuffer
 import java.util.*
 import kotlin.concurrent.schedule
-import kotlin.experimental.and
-import kotlin.experimental.or
-import kotlin.math.abs
-import kotlin.math.log10
 
 
 object RTEvaluator {
